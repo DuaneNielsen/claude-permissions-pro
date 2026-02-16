@@ -42,7 +42,7 @@ pattern = "npm *"
 pattern = "npx *"
 
 # Used 293 times
-# Examples: ["cat > /home/duane/primesignal/scripts/traces-cmd.mts << 'EOF'\nimport { mastra } from '../src/mastra/index.js'", "cat << 'EOF'", 'cat /tmp/graph-export/dxdo-graph-*.json']
+# Examples: ["cat > /home/user/project'EOF'\nimport { mastra } from '../src/mastra/index.js'", "cat << 'EOF'", 'cat /tmp/graph-export/dxdo-graph-*.json']
 [[allow]]
 pattern = "cat *"
 
@@ -97,7 +97,7 @@ pattern = "python3 *"
 pattern = "dx-do *"
 
 # Used 122 times
-# Examples: ['cd /home/duane/mastra', 'cd /tmp/contrastive-rl-viz', 'cd /home/duane/ubersignal']
+# Examples: ['cd /home/user/project', 'cd /tmp/contrastive-rl-viz', 'cd /home/user/project']
 [[allow]]
 pattern = "cd *"
 
@@ -129,7 +129,7 @@ pattern = "if *"
 pattern = "pkill *"
 
 # Used 64 times
-# Examples: ['EOF\nnpx tsx /home/duane/primesignal/scripts/traces-cmd.mts', 'EOF']
+# Examples: ['EOF\nnpx tsx /home/user/project', 'EOF']
 [[allow]]
 pattern = "EOF *"
 
