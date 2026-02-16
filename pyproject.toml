@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-permissions-pro"
+version = "0.1.0"
+description = "Pro-productivity permission hook for Claude Code with smart chain parsing"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "tomli>=2.0.0",
+    "tomli-w>=1.0.0",
+]
+
+[project.scripts]
+claude-permissions-pro = "claude_permissions_pro.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
