@@ -29,13 +29,106 @@ claude-permissions-pro/
 ## Installation
 
 ```bash
-cd /home/duane/primesignal/claude-permissions-pro
+cd claude-permissions-pro
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
+pip install pytest  # For testing
 ```
 
-## Claude Code Integration
+## Learning From Your History (The Main Workflow)
+
+The core idea: **use Claude Code to read your history, analyze your permissions, generate tests, and update your config**.
+
+### Step 1: Analyze Your History
+
+```bash
+source .venv/bin/activate
+claude-permissions-pro analyze --verbose
+```
+
+Reads `~/.claude/projects/*/` and outputs:
+```
+Total commands found: 4462
+Unique base commands: 367
+Chained commands (with &&, ||, etc.): 50
+
+Top commands:
+  git: 1137
+  npm: 519
+  curl: 436
+  ...
+
+Suggested patterns:
+  [HIGH] git * (used 1137x)
+  [HIGH] npm * (used 519x)
+  [MED] curl * (used 436x)
+```
+
+### Step 2: Generate Config From History
+
+```bash
+claude-permissions-pro init -o config.toml
+```
+
+Creates `config.toml` with patterns based on your actual command usage.
+
+### Step 3: Generate Tests From Your Approved Commands
+
+```bash
+claude-permissions-pro generate-tests -o tests/test_my_commands.py -c config.toml
+```
+
+This extracts every unique command from your history and creates a pytest test for each one. The test asserts that your config would ALLOW that command.
+
+### Step 4: Run Tests to Find Coverage Gaps
+
+```bash
+pytest tests/test_my_commands.py --tb=no -q
+```
+
+Output:
+```
+486 failed, 862 passed in 3.06s
+```
+
+- **Passed** = commands your config would auto-approve
+- **Failed** = commands you've used that aren't covered by your patterns
+
+### Step 5: Identify Missing Patterns
+
+```bash
+# See which command types are failing
+pytest tests/test_my_commands.py --tb=no -q 2>&1 | grep FAILED | \
+  sed 's/.*TestApproved_//' | sed 's/::test_.*//' | \
+  sort | uniq -c | sort -rn | head -20
+```
+
+Output:
+```
+     50 docker
+     25 kubectl
+     17 cargo
+     ...
+```
+
+### Step 6: Update Config and Re-test
+
+Add missing patterns to `config.toml`:
+```toml
+[[allow]]
+pattern = "docker *"
+
+[[allow]]
+pattern = "kubectl *"
+
+[[allow]]
+pattern = "cargo *"
+```
+
+Re-run tests until you hit your target pass rate.
+
+### Step 7: Deploy the Hook
 
 Add to `~/.claude/settings.json`:
 
@@ -48,7 +141,7 @@ Add to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "/home/duane/primesignal/claude-permissions-pro/.venv/bin/python -m claude_permissions_pro.hook --config /home/duane/primesignal/claude-permissions-pro/config.toml",
+            "command": "/path/to/claude-permissions-pro/.venv/bin/python -m claude_permissions_pro.hook --config /path/to/config.toml",
             "timeout": 5000
           }
         ]
@@ -58,60 +151,70 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-## CLI Commands
+Replace `/path/to/` with your actual install path.
+
+## CLI Reference
 
 ```bash
-# Activate venv first
-source .venv/bin/activate
+# Analyze history (reads ~/.claude/projects/)
+claude-permissions-pro analyze [--verbose] [--max-sessions N] [--output FILE]
 
-# Analyze your Claude session history and show suggested patterns
-claude-permissions-pro analyze --verbose
+# Generate config from history
+claude-permissions-pro init [--output FILE]
 
-# Generate initial config from your history
-claude-permissions-pro init -o config.toml
+# Test a single command against config
+claude-permissions-pro test --config FILE "command to test"
 
-# Test a specific command against your config
-claude-permissions-pro test -c config.toml "npm install && npm test"
+# Generate pytest tests from history
+claude-permissions-pro generate-tests --config FILE [--output FILE]
 
-# Generate pytest tests from your approved commands
-claude-permissions-pro generate-tests -o tests/test_approved_commands.py -c config.toml
+# Run as Claude Code hook (reads JSON from stdin)
+claude-permissions-pro hook --config FILE
 ```
 
 ## Testing
 
 ```bash
 source .venv/bin/activate
-pip install pytest
 
-# Run unit tests
+# Unit tests (fast, no history needed)
 pytest tests/test_shell_parser.py tests/test_matcher.py -v
 
-# Generate and run tests from your history
-claude-permissions-pro generate-tests -o tests/test_approved_commands.py -c config.toml
-pytest tests/test_approved_commands.py -v
+# Generate tests from YOUR history
+claude-permissions-pro generate-tests -o tests/test_my_commands.py -c config.toml
+
+# Run generated tests
+pytest tests/test_my_commands.py -v
 
 # Quick summary
-pytest tests/ --tb=no -q
+pytest tests/test_my_commands.py --tb=no -q
+
+# See failing command types
+pytest tests/test_my_commands.py --tb=no -q 2>&1 | grep FAILED | \
+  sed 's/.*TestApproved_//' | sed 's/::test_.*//' | \
+  sort | uniq -c | sort -rn
 ```
 
 ## How It Works
 
-1. **Shell Parser** (`shell_parser.py`): Parses commands into segments, handling:
-   - `&&` (AND chains)
-   - `||` (OR chains)
-   - `;` (sequential)
-   - `|` (pipes)
-   - Quoted strings (operators inside quotes aren't split)
-   - Redirects like `2>&1` (not treated as background operator)
+1. **Shell Parser** (`shell_parser.py`): Parses commands into segments
+   - Splits on `&&`, `||`, `;`, `|`
+   - Respects quoted strings (won't split `echo "a && b"`)
+   - Handles redirects (`2>&1` stays intact)
 
-2. **Matcher** (`matcher.py`): Checks each segment against patterns:
+2. **Matcher** (`matcher.py`): Checks each segment against patterns
    - Deny rules checked first
    - Allow rules checked second
    - In "smart" mode: ALL segments must match for chain to be allowed
 
-3. **Hook** (`hook.py`): Integrates with Claude Code's PreToolUse hook system:
-   - Reads JSON from stdin
-   - Outputs allow/deny/passthrough decision to stdout
+3. **History** (`history.py`): Extracts commands from `~/.claude/projects/`
+   - Reads JSONL session files
+   - Extracts Bash tool invocations
+   - Counts frequency for pattern suggestions
+
+4. **Hook** (`hook.py`): Claude Code integration
+   - Reads JSON from stdin (Claude Code protocol)
+   - Outputs allow/deny/passthrough to stdout
 
 ## Config Format
 
@@ -119,17 +222,27 @@ pytest tests/ --tb=no -q
 [settings]
 mode = "smart"  # smart | paranoid | yolo
 
+# Allow patterns (auto-approve if matched)
 [[allow]]
 pattern = "git *"
 
 [[allow]]
 pattern = "npm *"
 
+# Deny patterns (block, checked first)
 [[deny]]
 pattern = "rm -rf /*"
 
+# Ask patterns (always prompt user)
 [[ask]]
 pattern = "sudo *"
 ```
 
-Patterns use glob syntax (`*` matches anything). Wrap in `/` for regex: `/^npm (install|test)/`
+**Pattern syntax:**
+- Glob: `npm *`, `git commit *`
+- Regex: `/^npm (install|test|run)/`
+
+**Modes:**
+- `smart`: Allow chain only if ALL segments match
+- `paranoid`: Ask if ANY segment is unknown
+- `yolo`: Allow if ANY segment matches
