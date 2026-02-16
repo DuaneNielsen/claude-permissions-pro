@@ -12,7 +12,7 @@ A pro-productivity permission hook for Claude Code that actually understands cha
 
 ## Philosophy
 
-Other hooks block anything with `&&` or `|`. That's for losers.
+Other hooks block anything with `&&` or `|`. With LLMs nearly always chaining commands, these hooks are pointless.
 
 We parse the chain, check each part, and allow it if everything is safe.
 
