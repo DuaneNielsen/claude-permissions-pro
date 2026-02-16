@@ -14,7 +14,11 @@ A pro-productivity permission hook for Claude Code that actually understands cha
 
 Other hooks block anything with `&&` or `|`. With LLMs nearly always chaining commands, these hooks are pointless.
 
-We parse the chain, check each part, and allow it if everything is safe.
+**Our approach:**
+
+- **Smart parsing**: We parse the chain, check each part, and allow it if everything is safe
+- **Claude manages itself**: Claude can read your history, analyze patterns, and update the hook config for you
+- **Test with real data**: Generate tests from your actual usage history to measure hook effectiveness before deploying
 
 ## Quick Start
 
