@@ -155,3 +155,11 @@ def run_hook(config_path: Path):
     else:
         # ASK = passthrough to normal Claude Code permissions
         HookOutput(decision="", reason="").write_stdout()
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", "-c", required=True)
+    args = parser.parse_args()
+    run_hook(Path(args.config))
