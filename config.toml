@@ -414,7 +414,13 @@ pattern = "gunzip *"
 pattern = "rm -rf /*"
 
 [[deny]]
-pattern = "rm -rf ~*"
+pattern = "rm -rf ~"
+
+[[deny]]
+pattern = "rm -rf ~/"
+
+[[deny]]
+pattern = "rm -rf ~/*"
 
 [[deny]]
 pattern = "chmod 777 *"
