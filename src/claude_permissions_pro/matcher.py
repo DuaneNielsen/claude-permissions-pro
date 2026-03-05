@@ -72,6 +72,18 @@ class Pattern:
         """Check if a command matches this pattern."""
         command = command.strip()
 
+        # Normalize: strip leading env-var assignments (e.g. FOO=bar cmd -> cmd)
+        while command:
+            first = command.split(maxsplit=1)[0] if command.split() else ''
+            if '=' in first and first[0].isalpha():
+                rest = command.split(maxsplit=1)
+                if len(rest) > 1:
+                    command = rest[1]
+                else:
+                    break  # Bare assignment, nothing after
+            else:
+                break
+
         # Normalize: strip ./ prefix for matching
         if command.startswith("./"):
             command = command[2:]
@@ -79,8 +91,9 @@ class Pattern:
         # Normalize: replace path-based commands with just the binary name
         # e.g., ".venv/bin/python foo" -> "python foo"
         # e.g., "/usr/bin/node script.js" -> "node script.js"
+        # But skip redirect segments like ">/tmp/foo.log" or ">/dev/null"
         parts = command.split(maxsplit=1)
-        if parts and '/' in parts[0]:
+        if parts and '/' in parts[0] and not parts[0].startswith('>'):
             binary = parts[0].rsplit('/', 1)[-1]
             command = binary + (' ' + parts[1] if len(parts) > 1 else '')
 
@@ -163,8 +176,35 @@ class Matcher:
         # For chains, check each segment
         return self._check_chain(parsed)
 
+    @staticmethod
+    def _is_bare_assignment(command: str) -> bool:
+        """Check if command is a variable assignment (no separate execution).
+
+        Matches: FOO="bar", count=$(cmd), x=$(echo hi | wc -l)
+        Does NOT match: FOO=bar cmd (env prefix + command execution)
+        """
+        if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*=', command):
+            return False
+        # Simple assignment: no spaces (FOO="bar", X=1)
+        if len(command.split()) == 1:
+            return True
+        # Compound assignment: value is a subshell like var=$(...)
+        # Extract the value part after the first =
+        _, _, value = command.partition('=')
+        value = value.strip()
+        if value.startswith('$(') or value.startswith('`'):
+            return True
+        return False
+
     def _check_single(self, command: str) -> MatchResult:
         """Check a single command (no chains)."""
+        # Bare variable assignments (e.g., FOO="bar") are safe — no execution
+        if self._is_bare_assignment(command):
+            return MatchResult(
+                decision=Decision.ALLOW,
+                reason="Bare variable assignment (no execution)",
+            )
+
         for rule in self.deny_rules:
             if pattern := rule.matches(command):
                 return MatchResult(

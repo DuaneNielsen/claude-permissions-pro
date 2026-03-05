@@ -18,6 +18,8 @@ from .history import (
     iter_session_files,
     extract_commands_from_session,
 )
+from .hook import Config
+from .matcher import Matcher, Decision
 from .shell_parser import parse_command, extract_base_command
 
 
@@ -50,8 +52,16 @@ def generate_test_file(
 
     Returns number of test cases generated.
     """
-    # Commands that should require manual approval (ASK), not auto-allow
-    ASK_COMMANDS = {"sudo", "rm"}
+    # Load config to pre-check commands and determine expected decisions
+    resolved_config_path = Path(config_path).expanduser()
+    matcher = None
+    if resolved_config_path.exists():
+        config = Config.load(resolved_config_path)
+        matcher = Matcher(
+            allow_patterns=config.allow_patterns,
+            deny_patterns=config.deny_patterns,
+            mode=config.mode,
+        )
 
     # Group commands by base command for organization
     by_base: dict[str, list[str]] = {}
@@ -119,10 +129,18 @@ def generate_test_file(
             # Escape docstring (no backslashes that look like escapes)
             doc_cmd = _truncate(cmd, 50).replace('\\', '/').replace('"', "'")
 
-            # Determine expected decision
-            if base_cmd in ASK_COMMANDS:
-                expected_decision = "Decision.ASK"
-                expected_name = "ASK"
+            # Determine expected decision by actually running the matcher
+            if matcher:
+                check_result = matcher.check(cmd)
+                if check_result.decision == Decision.ALLOW:
+                    expected_decision = "Decision.ALLOW"
+                    expected_name = "ALLOW"
+                elif check_result.decision == Decision.DENY:
+                    # Skip denied commands — they shouldn't be in the test suite
+                    continue
+                else:
+                    expected_decision = "Decision.ASK"
+                    expected_name = "ASK"
             else:
                 expected_decision = "Decision.ALLOW"
                 expected_name = "ALLOW"

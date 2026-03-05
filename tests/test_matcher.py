@@ -137,6 +137,44 @@ class TestMatcher:
         assert result.decision == Decision.ALLOW
         # Should be treated as single command
 
+    def test_xdg_open_with_ampersand_redirect(self):
+        """xdg-open with &>/dev/null should be allowed when pattern exists."""
+        matcher = Matcher(
+            allow_patterns=["curl *", "xdg-open *"],
+            mode="smart"
+        )
+        result = matcher.check(
+            'curl -sk -b /tmp/cookies -o /tmp/cam.jpg '
+            '"https://localhost:8971/api/cam/latest.jpg?bbox=1&h=480" 2>&1 '
+            '&& xdg-open /tmp/cam.jpg &>/dev/null &'
+        )
+        assert result.decision == Decision.ALLOW
+
+    def test_for_loop_with_subshell_all_allowed(self):
+        """Multi-line for loop with known commands should be allowed."""
+        matcher = Matcher(
+            allow_patterns=[
+                "for *", "do", "do *", "done", "curl *",
+                "python3 *", "echo *",
+            ],
+            mode="smart"
+        )
+        cmd = (
+            'for tid in abc def; do '
+            'count=$(curl -s "http://example.com/$tid" | python3 -c "import sys,json;'
+            ' print(len(json.load(sys.stdin)))" 2>/dev/null); '
+            'echo "$tid: $count"; '
+            'done'
+        )
+        result = matcher.check(cmd)
+        assert result.decision == Decision.ALLOW
+
+    def test_variable_assignment_with_subshell(self):
+        """Variable assignments with $() should be auto-allowed."""
+        matcher = Matcher(allow_patterns=["echo *"], mode="smart")
+        result = matcher.check('count=$(echo 42); echo $count')
+        assert result.decision == Decision.ALLOW
+
     def test_multiple_patterns(self):
         """Multiple patterns for same command."""
         matcher = Matcher(

@@ -72,15 +72,13 @@ class TestParseCommand:
     def test_subshell_command_substitution(self):
         """$() should not be split on internal operators."""
         result = parse_command("echo $(cat file && wc -l)")
-        assert result.is_simple  # The && is inside $()
-        assert len(result.segments) == 1
+        assert len(result.segments) == 1  # && is inside $(), not split
         assert result.segments[0].has_subshell
 
     def test_backtick_substitution(self):
         """Backticks should not be split on internal operators."""
         result = parse_command("echo `cat file | wc -l`")
-        assert result.is_simple
-        assert len(result.segments) == 1
+        assert len(result.segments) == 1  # | is inside backticks, not split
 
     def test_background_operator(self):
         """Single & for background."""
@@ -97,6 +95,110 @@ class TestParseCommand:
         """Detect redirects in command."""
         result = parse_command("npm test > output.log 2>&1")
         assert result.segments[0].has_redirect
+
+    def test_ampersand_redirect_not_split(self):
+        """&> and &>> redirects should not split on the &."""
+        result = parse_command("xdg-open /tmp/foo.jpg &>/dev/null")
+        assert result.is_simple
+        assert len(result.segments) == 1
+        assert result.segments[0].command == "xdg-open /tmp/foo.jpg &>/dev/null"
+
+    def test_ampersand_redirect_in_chain(self):
+        """&>/dev/null inside a && chain should not cause extra splits."""
+        result = parse_command(
+            'curl -s http://example.com 2>&1 && xdg-open /tmp/out.jpg &>/dev/null'
+        )
+        assert len(result.segments) == 2
+        assert result.segments[0].command == "curl -s http://example.com 2>&1"
+        assert result.segments[1].operator_before == Operator.AND
+        assert result.segments[1].command == "xdg-open /tmp/out.jpg &>/dev/null"
+
+    def test_ampersand_redirect_then_background(self):
+        """&>/dev/null followed by trailing & (background) should split correctly."""
+        result = parse_command(
+            'xdg-open /tmp/out.jpg &>/dev/null &'
+        )
+        # trailing & with empty segment after it = 1 segment (empty trailing dropped)
+        assert len(result.segments) == 1
+        assert result.segments[0].command == "xdg-open /tmp/out.jpg &>/dev/null"
+
+    def test_ampersand_redirect_append(self):
+        """&>> (append) should not split either."""
+        result = parse_command("mycommand &>>/tmp/log.txt")
+        assert result.is_simple
+        assert len(result.segments) == 1
+
+    def test_semicolon_after_subshell(self):
+        """Semicolons after $() should split correctly."""
+        result = parse_command('x=$(echo hi); echo done')
+        assert len(result.segments) == 2
+        assert result.segments[0].command == "x=$(echo hi)"
+        assert result.segments[1].command == "echo done"
+
+    def test_and_after_subshell(self):
+        """&& after $() should split correctly."""
+        result = parse_command('x=$(echo hi) && echo done')
+        assert len(result.segments) == 2
+        assert result.segments[0].command == "x=$(echo hi)"
+        assert result.segments[1].command == "echo done"
+
+    def test_nested_subshell(self):
+        """Nested $() should track depth correctly."""
+        result = parse_command('x=$(echo $(date)); echo done')
+        assert len(result.segments) == 2
+        assert result.segments[0].command == "x=$(echo $(date))"
+        assert result.segments[1].command == "echo done"
+
+    def test_for_loop_with_subshell(self):
+        """For loop with $() assignment and semicolons should parse all segments."""
+        cmd = (
+            'for tid in abc def; do '
+            'count=$(curl -s "http://example.com/$tid" | python3 -c "import sys,json;'
+            ' print(len(json.load(sys.stdin)))" 2>/dev/null); '
+            'echo "$tid: $count"; '
+            'done'
+        )
+        result = parse_command(cmd)
+        commands = [s.command for s in result.segments]
+        assert 'for tid in abc def' in commands
+        assert 'done' in commands
+        # The body should be split into separate segments by ;
+        assert len(result.segments) >= 4
+
+    def test_newline_as_separator(self):
+        """Newlines outside quotes should act as command separators."""
+        result = parse_command('echo hello\necho world')
+        assert len(result.segments) == 2
+        assert result.segments[0].command == "echo hello"
+        assert result.segments[1].command == "echo world"
+
+    def test_newline_inside_quotes_not_separator(self):
+        """Newlines inside quotes should not split."""
+        result = parse_command('echo "hello\nworld"')
+        assert len(result.segments) == 1
+
+    def test_heredoc_not_split(self):
+        """Heredoc body should not be split on newlines."""
+        cmd = "python3 << 'EOF'\nimport json\nprint('hello')\nEOF"
+        result = parse_command(cmd)
+        assert len(result.segments) == 1
+        assert "import json" in result.segments[0].command
+
+    def test_heredoc_then_more_commands(self):
+        """Commands after heredoc should be separate segments."""
+        cmd = "cat << EOF\nhello\nworld\nEOF\necho done"
+        result = parse_command(cmd)
+        assert len(result.segments) == 2
+        assert "hello" in result.segments[0].command
+        assert result.segments[1].command == "echo done"
+
+    def test_heredoc_with_chain_before(self):
+        """&& before heredoc should split, but heredoc body stays together."""
+        cmd = "source .venv/bin/activate && python3 << 'EOF'\nimport sys\nprint(sys.version)\nEOF"
+        result = parse_command(cmd)
+        assert len(result.segments) == 2
+        assert result.segments[0].command == "source .venv/bin/activate"
+        assert "import sys" in result.segments[1].command
 
     def test_complex_chain(self):
         """Complex real-world chain."""

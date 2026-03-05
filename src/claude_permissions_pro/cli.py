@@ -109,6 +109,9 @@ def cmd_test(args):
     if result.matched_rule:
         print(f"Matched rule: {result.matched_rule}")
 
+    if result.decision.value == "ask" and config.judge and config.judge.enabled:
+        print(f"\nJudge: would be triggered (model={config.judge.model})")
+
 
 def cmd_init(args):
     """Generate initial config from history."""

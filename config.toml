@@ -408,6 +408,330 @@ pattern = "gzip *"
 [[allow]]
 pattern = "gunzip *"
 
+[[allow]]
+pattern = "xdg-open *"
+
+# Bare invocations (no args) for commands that already have "cmd *"
+[[allow]]
+pattern = "echo"
+
+[[allow]]
+pattern = "sort"
+
+[[allow]]
+pattern = "grep"
+
+[[allow]]
+pattern = "cat"
+
+[[allow]]
+pattern = "head"
+
+[[allow]]
+pattern = "tail"
+
+[[allow]]
+pattern = "sleep"
+
+[[allow]]
+pattern = "wc"
+
+[[allow]]
+pattern = "date"
+
+[[allow]]
+pattern = "diff"
+
+[[allow]]
+pattern = "env"
+
+# Shell keywords and builtins
+[[allow]]
+pattern = "then"
+
+[[allow]]
+pattern = "else"
+
+[[allow]]
+pattern = "elif *"
+
+[[allow]]
+pattern = "fi"
+
+[[allow]]
+pattern = "while *"
+
+[[allow]]
+pattern = "until *"
+
+[[allow]]
+pattern = "case *"
+
+[[allow]]
+pattern = "esac"
+
+[[allow]]
+pattern = "break"
+
+[[allow]]
+pattern = "break *"
+
+[[allow]]
+pattern = "continue"
+
+[[allow]]
+pattern = "continue *"
+
+[[allow]]
+pattern = "disown"
+
+[[allow]]
+pattern = "disown *"
+
+[[allow]]
+pattern = "command *"
+
+[[allow]]
+pattern = "printf *"
+
+[[allow]]
+pattern = "read *"
+
+[[allow]]
+pattern = "local *"
+
+[[allow]]
+pattern = "declare *"
+
+[[allow]]
+pattern = "eval *"
+
+[[allow]]
+pattern = "shift"
+
+[[allow]]
+pattern = "shift *"
+
+# System/desktop commands from history
+[[allow]]
+pattern = "systemctl *"
+
+[[allow]]
+pattern = "journalctl *"
+
+[[allow]]
+pattern = "i3-msg *"
+
+[[allow]]
+pattern = "niri *"
+
+[[allow]]
+pattern = "neowall *"
+
+[[allow]]
+pattern = "pw-link *"
+
+[[allow]]
+pattern = "pw-cli *"
+
+[[allow]]
+pattern = "pw-dump *"
+
+[[allow]]
+pattern = "flatpak *"
+
+[[allow]]
+pattern = "dpkg *"
+
+[[allow]]
+pattern = "apt *"
+
+[[allow]]
+pattern = "apt-cache *"
+
+[[allow]]
+pattern = "waybar *"
+
+[[allow]]
+pattern = "xdotool *"
+
+[[allow]]
+pattern = "xprop *"
+
+[[allow]]
+pattern = "xset *"
+
+[[allow]]
+pattern = "xmessage *"
+
+[[allow]]
+pattern = "xdg-mime *"
+
+[[allow]]
+pattern = "dmesg *"
+
+[[allow]]
+pattern = "dmesg"
+
+[[allow]]
+pattern = "lspci *"
+
+[[allow]]
+pattern = "lspci"
+
+[[allow]]
+pattern = "lsmod"
+
+[[allow]]
+pattern = "lsmod *"
+
+[[allow]]
+pattern = "lsusb"
+
+[[allow]]
+pattern = "lsusb *"
+
+[[allow]]
+pattern = "ip *"
+
+[[allow]]
+pattern = "file *"
+
+[[allow]]
+pattern = "strings *"
+
+[[allow]]
+pattern = "killall *"
+
+[[allow]]
+pattern = "env *"
+
+[[allow]]
+pattern = "bash *"
+
+[[allow]]
+pattern = "sh *"
+
+[[allow]]
+pattern = "pytest *"
+
+[[allow]]
+pattern = "ffmpeg *"
+
+[[allow]]
+pattern = "ffprobe *"
+
+[[allow]]
+pattern = "wget *"
+
+[[allow]]
+pattern = "pkg-config *"
+
+[[allow]]
+pattern = "glxinfo *"
+
+[[allow]]
+pattern = "glxinfo"
+
+[[allow]]
+pattern = "wayland-info *"
+
+[[allow]]
+pattern = "wayland-info"
+
+[[allow]]
+pattern = "busctl *"
+
+[[allow]]
+pattern = "firefoxpwa *"
+
+[[allow]]
+pattern = "snap *"
+
+[[allow]]
+pattern = "dconf *"
+
+[[allow]]
+pattern = "gsettings *"
+
+[[allow]]
+pattern = "gtk-launch *"
+
+[[allow]]
+pattern = "openrgb *"
+
+[[allow]]
+pattern = "swaymsg *"
+
+[[allow]]
+pattern = "wl-paste *"
+
+[[allow]]
+pattern = "wl-paste"
+
+[[allow]]
+pattern = "fc-list *"
+
+[[allow]]
+pattern = "fc-list"
+
+[[allow]]
+pattern = "base64 *"
+
+[[allow]]
+pattern = "man *"
+
+[[allow]]
+pattern = "yes *"
+
+[[allow]]
+pattern = "yes"
+
+[[allow]]
+pattern = "uniq *"
+
+[[allow]]
+pattern = "uniq"
+
+[[allow]]
+pattern = "identify *"
+
+[[allow]]
+pattern = "convert *"
+
+[[allow]]
+pattern = "groups"
+
+[[allow]]
+pattern = "groups *"
+
+[[allow]]
+pattern = "pacman *"
+
+[[allow]]
+pattern = "update-desktop-database *"
+
+[[allow]]
+pattern = "chafa *"
+
+[[allow]]
+pattern = "mpv *"
+
+[[allow]]
+pattern = "vlc *"
+
+[[allow]]
+pattern = "google-chrome *"
+
+[[allow]]
+pattern = "paplay *"
+
+[[allow]]
+pattern = "Xephyr *"
+
+[[allow]]
+pattern = "zgrep *"
+
 # Deny patterns (safety defaults)
 
 [[deny]]
@@ -425,6 +749,14 @@ pattern = "rm -rf ~/*"
 [[deny]]
 pattern = "chmod 777 *"
 
+# Judge configuration (LLM-based evaluation for unmatched commands)
+[judge]
+enabled = true
+model = "gpt-4o-mini"
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1"
+timeout = 5
+
 # Ask patterns (require manual approval)
 # These are tracked separately - tests expect ASK not ALLOW
 [[ask]]
@@ -432,3 +764,6 @@ pattern = "sudo *"
 
 [[ask]]
 pattern = "rm *"
+
+[[ask]]
+pattern = "rmdir *"

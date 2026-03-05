@@ -15,6 +15,7 @@ try:
 except ImportError:
     import tomllib as tomli  # Python 3.11+
 
+from .judge import JudgeConfig, JudgeError, evaluate as judge_evaluate
 from .matcher import Matcher, Decision
 
 
@@ -83,6 +84,7 @@ class Config:
     mode: str
     allow_patterns: list[str]
     deny_patterns: list[str]
+    judge: JudgeConfig | None = None
 
     @classmethod
     def load(cls, path: Path) -> "Config":
@@ -103,10 +105,22 @@ class Config:
             if "pattern" in rule:
                 deny_patterns.append(rule["pattern"])
 
+        judge = None
+        judge_data = data.get("judge", {})
+        if judge_data:
+            judge = JudgeConfig(
+                enabled=judge_data.get("enabled", False),
+                model=judge_data.get("model", "gpt-4o-mini"),
+                api_key_env=judge_data.get("api_key_env", "OPENAI_API_KEY"),
+                base_url=judge_data.get("base_url", "https://api.openai.com/v1"),
+                timeout=judge_data.get("timeout", 5),
+            )
+
         return cls(
             mode=mode,
             allow_patterns=allow_patterns,
             deny_patterns=deny_patterns,
+            judge=judge,
         )
 
 
@@ -153,7 +167,28 @@ def run_hook(config_path: Path):
             reason=result.reason
         ).write_stdout()
     else:
-        # ASK = passthrough to normal Claude Code permissions
+        # ASK = try judge if configured, otherwise passthrough
+        if config.judge and config.judge.enabled:
+            try:
+                segments = result.segments_checked or [command]
+                judge_result = judge_evaluate(
+                    command=command,
+                    segments=segments,
+                    config=config.judge,
+                    cwd=hook_input.cwd,
+                )
+                if judge_result.decision == "ALLOW":
+                    print(f"Judge approved: {judge_result.reason}", file=sys.stderr)
+                    HookOutput(
+                        decision="allow",
+                        reason=f"Judge: {judge_result.reason}"
+                    ).write_stdout()
+                    return
+                # Judge DENY = passthrough to human (judge cannot auto-deny)
+                print(f"Judge denied, deferring to human: {judge_result.reason}", file=sys.stderr)
+            except JudgeError as e:
+                print(f"Judge error, falling back to human: {e}", file=sys.stderr)
+        # Passthrough to normal Claude Code permissions
         HookOutput(decision="", reason="").write_stdout()
 
 
