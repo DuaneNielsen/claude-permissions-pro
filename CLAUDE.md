@@ -9,17 +9,26 @@ claude-permissions-pro/
 ├── src/
 │   └── claude_permissions_pro/
 │       ├── __init__.py          # Package init
-│       ├── cli.py               # CLI commands (analyze, init, test, generate-tests, hook)
+│       ├── cli.py               # CLI commands (analyze, init, test, generate-tests, confusion-matrix, hook)
+│       ├── confusion_matrix.py  # Confusion matrix analysis (TP/FN/recall/F1)
 │       ├── generate_tests.py    # Generate pytest from session history
 │       ├── history.py           # Extract commands from ~/.claude sessions
-│       ├── hook.py              # Claude Code PreToolUse hook interface
+│       ├── hook.py              # Claude Code PreToolUse hook interface (logs decisions)
+│       ├── judge.py             # LLM judge for ASK decisions
+│       ├── logger.py            # Decision logger (JSONL to ~/.claude/permissions-pro/)
 │       ├── matcher.py           # Pattern matching with per-segment evaluation
 │       └── shell_parser.py      # Parse &&, ||, ;, | chains respecting quotes
 ├── tests/
 │   ├── conftest.py              # Pytest config
+│   ├── test_confusion_matrix.py # Tests for confusion matrix analysis
+│   ├── test_judge.py            # Tests for LLM judge
+│   ├── test_logger.py           # Tests for decision logger
 │   ├── test_shell_parser.py     # Tests for chain parsing
 │   ├── test_matcher.py          # Tests for pattern matching
 │   └── test_approved_commands.py # Auto-generated from your history (gitignored)
+├── .claude/
+│   └── skills/
+│       └── confusion/SKILL.md   # /confusion slash command
 ├── config.toml                  # Permission patterns (generated from history)
 ├── pyproject.toml               # Python package config
 ├── README.md                    # User readme
@@ -168,6 +177,9 @@ claude-permissions-pro test --config FILE "command to test"
 # Generate pytest tests from history
 claude-permissions-pro generate-tests --config FILE [--output FILE]
 
+# Confusion matrix analysis (recall, false negatives, coverage gaps)
+claude-permissions-pro confusion-matrix --config FILE [--max-sessions N] [--log FILE]
+
 # Run as Claude Code hook (reads JSON from stdin)
 claude-permissions-pro hook --config FILE
 ```
@@ -215,6 +227,18 @@ pytest tests/test_my_commands.py --tb=no -q 2>&1 | grep FAILED | \
 4. **Hook** (`hook.py`): Claude Code integration
    - Reads JSON from stdin (Claude Code protocol)
    - Outputs allow/deny/passthrough to stdout
+   - Logs every decision to `~/.claude/permissions-pro/decisions.jsonl`
+
+5. **Logger** (`logger.py`): Decision logging
+   - Append-only JSONL log of every hook decision
+   - Records: command, cwd, matcher decision, judge decision, final outcome
+   - Feeds the confusion matrix analysis
+
+6. **Confusion Matrix** (`confusion_matrix.py`): Accuracy analysis
+   - Compares config decisions against ground truth (your history = approved commands)
+   - Computes: TP, FN, recall (auto-approve rate), manual review rate
+   - From history: what % of your workflow is auto-approved
+   - From decision log: tracks judge overrides (judge said no, you said yes)
 
 ## Config Format
 

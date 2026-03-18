@@ -256,6 +256,12 @@ pattern = "lsof *"
 [[allow]]
 pattern = "docker *"
 
+[[allow]]
+pattern = "make *"
+
+[[allow]]
+pattern = "make"
+
 # Used 27 times
 # Examples: []
 [[allow]]

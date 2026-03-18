@@ -143,6 +143,42 @@ def cmd_init(args):
 }''')
 
 
+def cmd_confusion_matrix(args):
+    """Run confusion matrix analysis against history and/or decision log."""
+    from .confusion_matrix import analyze_from_history, analyze_from_log
+    from .hook import Config
+    from .logger import DEFAULT_LOG_FILE
+    from .matcher import Matcher
+
+    config_path = Path(args.config)
+    if not config_path.exists():
+        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
+        sys.exit(1)
+
+    config = Config.load(config_path)
+    matcher = Matcher(
+        allow_patterns=config.allow_patterns,
+        deny_patterns=config.deny_patterns,
+        mode=config.mode,
+    )
+
+    # History-based analysis (always available)
+    print("Analyzing session history...")
+    history_result = analyze_from_history(matcher, max_sessions=args.max_sessions)
+    print(history_result.format_report())
+
+    # Decision log analysis (if log exists)
+    log_file = Path(args.log) if args.log else DEFAULT_LOG_FILE
+    if log_file.exists():
+        print()
+        print("Analyzing decision log...")
+        log_result = analyze_from_log(log_file)
+        print(log_result.format_report())
+    elif not args.log:
+        print("No decision log found yet. Run with the hook active to collect data.")
+        print(f"  Log path: {DEFAULT_LOG_FILE}")
+
+
 def cmd_generate_tests(args):
     """Generate pytest tests from approved commands in history."""
     from .generate_tests import extract_all_commands, generate_test_file
@@ -193,6 +229,13 @@ def main():
     p_init = subparsers.add_parser("init", help="Generate config from history")
     p_init.add_argument("--output", "-o", help="Output config file path")
     p_init.set_defaults(func=cmd_init)
+
+    # confusion-matrix command
+    p_cm = subparsers.add_parser("confusion-matrix", help="Analyze config accuracy vs your history")
+    p_cm.add_argument("--config", "-c", required=True, help="Config file path")
+    p_cm.add_argument("--max-sessions", type=int, help="Limit sessions to analyze")
+    p_cm.add_argument("--log", help="Decision log file (default: ~/.claude/permissions-pro/decisions.jsonl)")
+    p_cm.set_defaults(func=cmd_confusion_matrix)
 
     # generate-tests command
     p_gentests = subparsers.add_parser("generate-tests", help="Generate pytest tests from history")

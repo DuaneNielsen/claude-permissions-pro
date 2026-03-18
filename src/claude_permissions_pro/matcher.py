@@ -36,6 +36,38 @@ class Pattern:
     compiled: re.Pattern | None # Compiled regex or None for glob
     base_command: str | None    # If pattern starts with a command name
 
+    @staticmethod
+    def _strip_env_prefixes(command: str) -> str:
+        """Strip leading VAR=value assignments, handling quoted values with spaces."""
+        while command:
+            # Check if command starts with a variable assignment
+            m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)=', command)
+            if not m:
+                break
+            # Skip past the VAR= part
+            rest = command[m.end():]
+            # Parse the value (may be quoted)
+            if rest.startswith('"'):
+                # Find closing quote
+                end = rest.find('"', 1)
+                if end == -1:
+                    break  # Unterminated quote, bail
+                rest = rest[end + 1:]
+            elif rest.startswith("'"):
+                end = rest.find("'", 1)
+                if end == -1:
+                    break
+                rest = rest[end + 1:]
+            else:
+                # Unquoted: value extends to next whitespace
+                parts = rest.split(maxsplit=1)
+                rest = parts[1] if len(parts) > 1 else ''
+            rest = rest.lstrip()
+            if not rest:
+                break  # Bare assignment, nothing after
+            command = rest
+        return command
+
     @classmethod
     def from_string(cls, pattern: str) -> "Pattern":
         """
@@ -73,16 +105,8 @@ class Pattern:
         command = command.strip()
 
         # Normalize: strip leading env-var assignments (e.g. FOO=bar cmd -> cmd)
-        while command:
-            first = command.split(maxsplit=1)[0] if command.split() else ''
-            if '=' in first and first[0].isalpha():
-                rest = command.split(maxsplit=1)
-                if len(rest) > 1:
-                    command = rest[1]
-                else:
-                    break  # Bare assignment, nothing after
-            else:
-                break
+        # Handles quoted values like COMPUTE_LEVEL="50 60 70 80 90"
+        command = self._strip_env_prefixes(command)
 
         # Normalize: strip ./ prefix for matching
         if command.startswith("./"):

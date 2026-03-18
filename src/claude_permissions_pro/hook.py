@@ -16,6 +16,7 @@ except ImportError:
     import tomllib as tomli  # Python 3.11+
 
 from .judge import JudgeConfig, JudgeError, evaluate as judge_evaluate
+from .logger import log_decision
 from .matcher import Matcher, Decision
 
 
@@ -156,29 +157,62 @@ def run_hook(config_path: Path):
 
     result = matcher.check(command)
 
+    segments = result.segments_checked or [command]
+    judge_decision = None
+    judge_reason = None
+
     if result.decision == Decision.ALLOW:
+        log_decision(
+            command=command,
+            cwd=hook_input.cwd,
+            matcher_decision="allow",
+            matched_rule=result.matched_rule,
+            final_decision="allow",
+            segments=segments,
+        )
         HookOutput(
             decision="allow",
             reason=result.reason
         ).write_stdout()
     elif result.decision == Decision.DENY:
+        log_decision(
+            command=command,
+            cwd=hook_input.cwd,
+            matcher_decision="deny",
+            matched_rule=result.matched_rule,
+            final_decision="deny",
+            segments=segments,
+        )
         HookOutput(
             decision="deny",
             reason=result.reason
         ).write_stdout()
     else:
         # ASK = try judge if configured, otherwise passthrough
+        final = "passthrough"
         if config.judge and config.judge.enabled:
             try:
-                segments = result.segments_checked or [command]
                 judge_result = judge_evaluate(
                     command=command,
                     segments=segments,
                     config=config.judge,
                     cwd=hook_input.cwd,
                 )
+                judge_decision = judge_result.decision
+                judge_reason = judge_result.reason
                 if judge_result.decision == "ALLOW":
                     print(f"Judge approved: {judge_result.reason}", file=sys.stderr)
+                    final = "allow"
+                    log_decision(
+                        command=command,
+                        cwd=hook_input.cwd,
+                        matcher_decision="ask",
+                        matched_rule=result.matched_rule,
+                        judge_decision=judge_decision,
+                        judge_reason=judge_reason,
+                        final_decision="allow",
+                        segments=segments,
+                    )
                     HookOutput(
                         decision="allow",
                         reason=f"Judge: {judge_result.reason}"
@@ -188,6 +222,17 @@ def run_hook(config_path: Path):
                 print(f"Judge denied, deferring to human: {judge_result.reason}", file=sys.stderr)
             except JudgeError as e:
                 print(f"Judge error, falling back to human: {e}", file=sys.stderr)
+
+        log_decision(
+            command=command,
+            cwd=hook_input.cwd,
+            matcher_decision="ask",
+            matched_rule=result.matched_rule,
+            judge_decision=judge_decision,
+            judge_reason=judge_reason,
+            final_decision=final,
+            segments=segments,
+        )
         # Passthrough to normal Claude Code permissions
         HookOutput(decision="", reason="").write_stdout()
 

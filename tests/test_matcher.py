@@ -35,6 +35,31 @@ class TestPattern:
         assert not p.matches("git push")
 
 
+class TestEnvVarStripping:
+    """Tests for env-var prefix stripping in Pattern."""
+
+    def test_simple_env_prefix(self):
+        p = Pattern.from_string("docker *")
+        assert p.matches("ARCH=amd64 docker build .")
+
+    def test_multiple_env_prefixes(self):
+        p = Pattern.from_string("docker *")
+        assert p.matches("ARCH=amd64 TAG=latest docker build .")
+
+    def test_quoted_env_value_with_spaces(self):
+        p = Pattern.from_string("docker *")
+        assert p.matches('COMPUTE_LEVEL="50 60 70 80 90" docker build .')
+
+    def test_single_quoted_env_value_with_spaces(self):
+        p = Pattern.from_string("make *")
+        assert p.matches("CFLAGS='-O2 -Wall' make all")
+
+    def test_bare_assignment_no_strip(self):
+        """Bare assignment with no command after should not match."""
+        p = Pattern.from_string("docker *")
+        assert not p.matches("FOO=bar")
+
+
 class TestMatcher:
     """Tests for Matcher class."""
 
@@ -173,6 +198,51 @@ class TestMatcher:
         """Variable assignments with $() should be auto-allowed."""
         matcher = Matcher(allow_patterns=["echo *"], mode="smart")
         result = matcher.check('count=$(echo 42); echo $count')
+        assert result.decision == Decision.ALLOW
+
+    def test_env_prefix_with_quoted_spaces(self):
+        """Env vars with quoted values containing spaces should be stripped."""
+        matcher = Matcher(
+            allow_patterns=["docker *"],
+            mode="smart"
+        )
+        result = matcher.check(
+            'ARCH=amd64 COMPUTE_LEVEL="50 60 70 80 90" docker buildx bake '
+            '--file=docker/tensorrt/trt.hcl tensorrt --load'
+        )
+        assert result.decision == Decision.ALLOW
+
+    def test_frigate_build_chain(self):
+        """Full frigate build chain: cd && make && docker buildx | tail."""
+        matcher = Matcher(
+            allow_patterns=["cd *", "make *", "docker *", "tail *"],
+            mode="smart"
+        )
+        result = matcher.check(
+            'cd /home/duane/frigate-source && make version 2>&1 '
+            '&& ARCH=amd64 COMPUTE_LEVEL="50 60 70 80 90" docker buildx bake '
+            '--file=docker/tensorrt/trt.hcl tensorrt '
+            '--set tensorrt.tags=frigate:latest-tensorrt --load 2>&1 | tail -5'
+        )
+        assert result.decision == Decision.ALLOW
+        assert len(result.segments_checked) == 4
+
+    def test_docker_compose_up(self):
+        """docker compose up -d should be allowed."""
+        matcher = Matcher(allow_patterns=["docker *"])
+        assert matcher.check("docker compose up -d").decision == Decision.ALLOW
+        assert matcher.check("docker compose up -d frigate").decision == Decision.ALLOW
+
+    def test_docker_exec(self):
+        """docker exec should be allowed."""
+        matcher = Matcher(allow_patterns=["docker *"])
+        result = matcher.check("docker exec frigate cat /config/config.yml")
+        assert result.decision == Decision.ALLOW
+
+    def test_docker_logs(self):
+        """docker logs should be allowed."""
+        matcher = Matcher(allow_patterns=["docker *"])
+        result = matcher.check("docker logs frigate --tail 50")
         assert result.decision == Decision.ALLOW
 
     def test_multiple_patterns(self):
