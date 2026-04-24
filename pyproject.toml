@@ -9,7 +9,7 @@ description = "Pro-productivity permission hook for Claude Code with smart chain
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "tomli>=2.0.0",
+    "tomli>=2.0.0; python_version < '3.11'",
     "tomli-w>=1.0.0",
 ]
 

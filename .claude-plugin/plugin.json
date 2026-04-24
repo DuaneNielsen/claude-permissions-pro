@@ -1,0 +1,17 @@
+{
+  "name": "permissions-pro",
+  "version": "0.1.0",
+  "description": "Smart permission hook for Claude Code — parses chained bash commands and auto-approves safe patterns",
+  "author": {
+    "name": "Duane Nielsen"
+  },
+  "repository": "https://github.com/duanenielsen/claude-permissions-pro",
+  "license": "MIT",
+  "keywords": [
+    "permissions",
+    "security",
+    "bash",
+    "hook",
+    "shell"
+  ]
+}

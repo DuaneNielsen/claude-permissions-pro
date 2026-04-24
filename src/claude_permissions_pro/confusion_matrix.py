@@ -174,6 +174,7 @@ def analyze_from_history(
 
 def analyze_from_log(
     log_file: Path | None = None,
+    matcher: Matcher | None = None,
 ) -> ConfusionResult:
     """
     Analyze the decision log for override patterns.
@@ -181,31 +182,45 @@ def analyze_from_log(
     Looks for commands where the hook passed through to human review
     (the user was prompted). Since those commands then executed,
     the user approved them — these are false negatives / overrides.
+
+    If `matcher` is provided, TP/FN are re-evaluated against the current
+    config instead of the stored `final_decision`. The stored decision
+    reflects the config *at the time the command ran* — after editing the
+    config, those numbers go stale. Passthrough/judge-override stats
+    always come from the stored record (those are historical facts).
     """
     result = ConfusionResult()
 
     for record in iter_decisions(log_file):
         result.total_commands += 1
 
-        if record.final_decision == "allow":
-            result.true_positives += 1
-        elif record.final_decision == "passthrough":
+        # Historical passthrough/override stats come from the stored record.
+        if record.final_decision == "passthrough":
             result.passthrough_count += 1
-            result.false_negatives += 1
-            if len(result.fn_samples) < 50:
-                result.fn_samples.append(record.command)
-
-            base = record.command.split()[0] if record.command.split() else record.command
-            result.fn_by_command[base] += 1
-
             if record.judge_decision == "DENY":
                 result.judge_overrides += 1
                 result.judge_denied_commands.append(record.command)
-        elif record.final_decision == "deny":
-            # Actually blocked — this is a true negative (or false positive
-            # if the user would have wanted it). We count it but can't
-            # classify without knowing user intent.
+
+        # TP/FN classification: prefer re-evaluation against the current
+        # config when available, otherwise fall back to the stored decision.
+        if matcher is not None:
+            current = matcher.check(record.command)
+            is_allow = current.decision == Decision.ALLOW
+        else:
+            is_allow = record.final_decision == "allow"
+
+        if is_allow:
+            result.true_positives += 1
+        elif record.final_decision == "deny" and matcher is None:
+            # Actually blocked — true negative (or FP if user would have
+            # wanted it). Can't classify without knowing user intent.
             pass
+        else:
+            result.false_negatives += 1
+            if len(result.fn_samples) < 50:
+                result.fn_samples.append(record.command)
+            base = record.command.split()[0] if record.command.split() else record.command
+            result.fn_by_command[base] += 1
 
     result.unique_commands = result.total_commands  # log entries are already per-invocation
     return result

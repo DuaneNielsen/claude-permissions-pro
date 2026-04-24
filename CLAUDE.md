@@ -6,6 +6,14 @@ Smart permission hook for Claude Code that parses chained commands and evaluates
 
 ```
 claude-permissions-pro/
+├── .claude-plugin/
+│   └── plugin.json              # Plugin manifest (name, version, description)
+├── hooks/
+│   ├── hooks.json               # Hook registration (PreToolUse → Bash)
+│   └── pretooluse.py            # Hook entry point (bootstraps src/ and runs)
+├── skills/
+│   └── less-permission-prompts/
+│       └── SKILL.md             # /less-permission-prompts — measure coverage + patch config
 ├── src/
 │   └── claude_permissions_pro/
 │       ├── __init__.py          # Package init
@@ -26,16 +34,42 @@ claude-permissions-pro/
 │   ├── test_shell_parser.py     # Tests for chain parsing
 │   ├── test_matcher.py          # Tests for pattern matching
 │   └── test_approved_commands.py # Auto-generated from your history (gitignored)
-├── .claude/
-│   └── skills/
-│       └── confusion/SKILL.md   # /confusion slash command
-├── config.toml                  # Permission patterns (generated from history)
+├── config.toml                  # Permission patterns (bundled default)
 ├── pyproject.toml               # Python package config
 ├── README.md                    # User readme
 └── CLAUDE.md                    # This file
 ```
 
 ## Installation
+
+### As a Claude Code Plugin (recommended)
+
+If the repo is on GitHub:
+```
+/plugin marketplace add youruser/claude-permissions-pro
+/plugin install permissions-pro
+```
+
+For local development/testing:
+```bash
+claude --plugin-dir /path/to/claude-permissions-pro
+```
+
+The plugin registers itself as a PreToolUse hook automatically — no manual settings.json edits needed.
+
+### Config Location
+
+The hook checks for config in this order:
+1. `~/.config/claude-permissions-pro/config.toml` (user customized)
+2. `$CLAUDE_PLUGIN_ROOT/config.toml` (bundled default)
+
+To customize, copy the bundled config:
+```bash
+mkdir -p ~/.config/claude-permissions-pro
+cp /path/to/claude-permissions-pro/config.toml ~/.config/claude-permissions-pro/config.toml
+```
+
+### For CLI tools (analyze, generate-tests, etc.)
 
 ```bash
 cd claude-permissions-pro
@@ -137,9 +171,11 @@ pattern = "cargo *"
 
 Re-run tests until you hit your target pass rate.
 
-### Step 7: Deploy the Hook
+### Step 7: Deploy
 
-Add to `~/.claude/settings.json`:
+If installed as a plugin, the hook is already active — nothing to do.
+
+For manual setup without the plugin, add to `~/.claude/settings.json`:
 
 ```json
 {
@@ -150,8 +186,8 @@ Add to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "/path/to/claude-permissions-pro/.venv/bin/python -m claude_permissions_pro.hook --config /path/to/config.toml",
-            "timeout": 5000
+            "command": "python3 /path/to/claude-permissions-pro/hooks/pretooluse.py",
+            "timeout": 10000
           }
         ]
       }
@@ -159,8 +195,6 @@ Add to `~/.claude/settings.json`:
   }
 }
 ```
-
-Replace `/path/to/` with your actual install path.
 
 ## CLI Reference
 

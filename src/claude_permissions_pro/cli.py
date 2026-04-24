@@ -122,25 +122,14 @@ def cmd_init(args):
 
     config = export_suggested_config(analysis, min_confidence=0.5)
 
-    output_path = Path(args.output) if args.output else Path.home() / ".config" / "claude-permissions-pro.toml"
+    output_path = Path(args.output) if args.output else Path.home() / ".config" / "claude-permissions-pro" / "config.toml"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(config)
 
     print(f"Config written to: {output_path}")
     print()
-    print("To use with Claude Code, add to your .claude/settings.json:")
-    print()
-    print('''{
-  "hooks": {
-    "PreToolUse": [{
-      "matcher": "Bash",
-      "hooks": [{
-        "type": "command",
-        "command": "claude-permissions-pro hook --config ''' + str(output_path) + '''"
-      }]
-    }]
-  }
-}''')
+    print("If installed as a Claude Code plugin, the hook will pick up this config automatically.")
+    print(f"  Config search order: {output_path} > $CLAUDE_PLUGIN_ROOT/config.toml")
 
 
 def cmd_confusion_matrix(args):
@@ -172,7 +161,7 @@ def cmd_confusion_matrix(args):
     if log_file.exists():
         print()
         print("Analyzing decision log...")
-        log_result = analyze_from_log(log_file)
+        log_result = analyze_from_log(log_file, matcher=matcher)
         print(log_result.format_report())
     elif not args.log:
         print("No decision log found yet. Run with the hook active to collect data.")

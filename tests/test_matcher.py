@@ -34,6 +34,19 @@ class TestPattern:
         assert p.matches("git commit -m 'message'")
         assert not p.matches("git push")
 
+    def test_trailing_star_matches_bare_command(self):
+        # Shell keywords like `done`, `do`, `echo` often appear bare as
+        # chain segments. `"cmd *"` should match both `cmd` and `cmd ...`.
+        p = Pattern.from_string("echo *")
+        assert p.matches("echo hello")
+        assert p.matches("echo")
+
+    def test_trailing_star_bare_does_not_match_prefix(self):
+        # `"echo *"` must not match `"echoback"` — only exact bare match.
+        p = Pattern.from_string("echo *")
+        assert not p.matches("echoback")
+        assert not p.matches("echos")
+
 
 class TestEnvVarStripping:
     """Tests for env-var prefix stripping in Pattern."""

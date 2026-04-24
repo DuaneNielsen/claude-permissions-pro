@@ -90,3 +90,29 @@ class TestAnalyzeFromLog:
         log_file = tmp_path / "nonexistent.jsonl"
         result = analyze_from_log(log_file)
         assert result.total_commands == 0
+
+    def test_matcher_reevaluates_historical_decisions(self, tmp_path):
+        # Simulate: user previously ran commands that the hook asked about
+        # (passthrough). User has since added an allow pattern. The log
+        # entry's final_decision is still "passthrough" — but under the
+        # current config, those commands should auto-approve.
+        log_file = tmp_path / "test.jsonl"
+        for cmd in ["ssh mac 'uptime'", "ssh bastion ls"]:
+            log_decision(
+                command=cmd, cwd="/tmp",
+                matcher_decision="ask", final_decision="passthrough",
+                log_file=log_file,
+            )
+
+        # Without a matcher: stale stored decisions → all FN.
+        stale = analyze_from_log(log_file)
+        assert stale.true_positives == 0
+        assert stale.false_negatives == 2
+
+        # With current matcher that allows ssh: re-evaluated → all TP.
+        matcher = Matcher(allow_patterns=["ssh *"])
+        fresh = analyze_from_log(log_file, matcher=matcher)
+        assert fresh.true_positives == 2
+        assert fresh.false_negatives == 0
+        # Passthrough count stays historical regardless.
+        assert fresh.passthrough_count == 2

@@ -68,6 +68,33 @@ class Pattern:
             command = rest
         return command
 
+    @staticmethod
+    def _strip_sudo(command: str) -> str:
+        """Strip leading sudo and its flags, leaving the actual command.
+
+        sudo is just privilege escalation — the underlying command determines safety.
+        Handles: sudo cmd, sudo -u user cmd, sudo -E cmd, sudo -i cmd, etc.
+        """
+        if not command.startswith("sudo"):
+            return command
+        parts = command.split()
+        if not parts or parts[0] != "sudo":
+            return command
+        i = 1
+        while i < len(parts):
+            arg = parts[i]
+            if arg == "--":
+                i += 1
+                break
+            if not arg.startswith("-"):
+                break
+            # Flags that take an argument: -u user, -g group, -C fd, -D dir
+            if arg in ("-u", "-g", "-C", "-D"):
+                i += 2  # skip flag + its value
+            else:
+                i += 1  # skip boolean flag (-E, -i, -n, -s, etc.)
+        return " ".join(parts[i:]) if i < len(parts) else command
+
     @classmethod
     def from_string(cls, pattern: str) -> "Pattern":
         """
@@ -108,6 +135,10 @@ class Pattern:
         # Handles quoted values like COMPUTE_LEVEL="50 60 70 80 90"
         command = self._strip_env_prefixes(command)
 
+        # Normalize: strip sudo prefix (sudo is just privilege escalation,
+        # the actual command determines safety)
+        command = self._strip_sudo(command)
+
         # Normalize: strip ./ prefix for matching
         if command.startswith("./"):
             command = command[2:]
@@ -125,7 +156,17 @@ class Pattern:
             return bool(self.compiled.search(command))
 
         # Glob matching
-        return fnmatch.fnmatch(command, self.raw)
+        if fnmatch.fnmatch(command, self.raw):
+            return True
+
+        # "cmd *" patterns should also match bare "cmd" (no args).
+        # Shell keywords like `done`, `do`, `for`, `echo` appear bare as
+        # chain segments — without this, they'd cascade to ASK on the
+        # whole chain.
+        if self.raw.endswith(" *") and command == self.raw[:-2]:
+            return True
+
+        return False
 
 
 @dataclass

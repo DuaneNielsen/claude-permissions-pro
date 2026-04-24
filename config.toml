@@ -46,6 +46,23 @@ pattern = "npx *"
 [[allow]]
 pattern = "cat *"
 
+# Shell noop/truncation idioms (: > /tmp/file, > /tmp/file)
+[[allow]]
+pattern = ": *"
+
+[[allow]]
+pattern = ":"
+
+[[allow]]
+pattern = "> *"
+
+# Single-file rm in /tmp is always safe
+[[allow]]
+pattern = "rm /tmp/*"
+
+[[allow]]
+pattern = "rm -f /tmp/*"
+
 # Used 269 times
 # Examples: ['echo "---"']
 [[allow]]
@@ -356,6 +373,9 @@ pattern = "pgrep *"
 
 [[allow]]
 pattern = "fuser *"
+
+[[allow]]
+pattern = "nvidia-smi"
 
 [[allow]]
 pattern = "nvidia-smi *"
@@ -738,19 +758,103 @@ pattern = "Xephyr *"
 [[allow]]
 pattern = "zgrep *"
 
+[[allow]]
+pattern = "bluetoothctl *"
+
+[[allow]]
+pattern = "bluetoothctl"
+
+[[allow]]
+pattern = "cargo *"
+
+[[allow]]
+pattern = "ping *"
+
+[[allow]]
+pattern = "nmap *"
+
+[[allow]]
+pattern = "truncate *"
+
+[[allow]]
+pattern = "claude-permissions-pro *"
+
+[[allow]]
+pattern = "bun *"
+
+[[allow]]
+pattern = "awk *"
+
+[[allow]]
+pattern = "tr *"
+
+[[allow]]
+pattern = "time *"
+
+[[allow]]
+pattern = "copyq *"
+
+[[allow]]
+pattern = "meson *"
+
+[[allow]]
+pattern = "loginctl *"
+
+[[allow]]
+pattern = "cmake *"
+
+[[allow]]
+pattern = "ninja *"
+
+[[allow]]
+pattern = "ln *"
+
+[[allow]]
+pattern = "hostname"
+
+[[allow]]
+pattern = "hostname *"
+
+[[allow]]
+pattern = "cut *"
+
+[[allow]]
+pattern = "lsblk"
+
+[[allow]]
+pattern = "lsblk *"
+
+[[allow]]
+pattern = "readlink *"
+
+[[allow]]
+pattern = "sensors"
+
+[[allow]]
+pattern = "sensors *"
+
+[[allow]]
+pattern = "Xvfb *"
+
+[[allow]]
+pattern = "hash *"
+
+[[allow]]
+pattern = "pipx *"
+
+# User scripts (path-normalized to binary name by matcher)
+[[allow]]
+pattern = "niri-columns.py *"
+
+[[allow]]
+pattern = "niri-columns.py"
+
 # Deny patterns (safety defaults)
 
 [[deny]]
-pattern = "rm -rf /*"
-
-[[deny]]
-pattern = "rm -rf ~"
-
-[[deny]]
-pattern = "rm -rf ~/"
-
-[[deny]]
-pattern = "rm -rf ~/*"
+# Block rm -rf on root, home dir, or top-level dirs like /usr, /etc, /var
+# But allow rm -rf on subdirs like /tmp/build, /home/duane/project/dist
+pattern = "/^rm\\s+(-[a-zA-Z]*r[a-zA-Z]*\\s+)+(\\/\\s*$|~\\/?($|\\s)|\\/(usr|etc|var|bin|sbin|lib|opt|boot|srv|sys|proc|dev|run|mnt|media)(\\s|\\/\\s*$|$))/"
 
 [[deny]]
 pattern = "chmod 777 *"
@@ -765,9 +869,6 @@ timeout = 5
 
 # Ask patterns (require manual approval)
 # These are tracked separately - tests expect ASK not ALLOW
-[[ask]]
-pattern = "sudo *"
-
 [[ask]]
 pattern = "rm *"
 
